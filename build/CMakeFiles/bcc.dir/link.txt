@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/bcc.dir/src/b-compiler.cpp.o CMakeFiles/bcc.dir/src/lexer/lexer.cpp.o CMakeFiles/bcc.dir/src/parser/parser.cpp.o CMakeFiles/bcc.dir/src/allocator/allocator.cpp.o CMakeFiles/bcc.dir/src/generator/generator.cpp.o -o bcc 

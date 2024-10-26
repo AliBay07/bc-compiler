@@ -1,0 +1,3 @@
+/home/ali/Desktop/Projects/b-compiler/build/CMakeFiles/bcc.dir
+/home/ali/Desktop/Projects/b-compiler/build/CMakeFiles/edit_cache.dir
+/home/ali/Desktop/Projects/b-compiler/build/CMakeFiles/rebuild_cache.dir
