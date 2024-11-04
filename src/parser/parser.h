@@ -13,8 +13,12 @@
 using namespace std;
 
 class Parser {
+private:
+    static void printTree(const ParseNode& root);
 public:
-    ParseNode parse(const vector<Token>& tokens);
+    static ParseNode parse(const vector<Token>& tokens);
+
+    static ParseNode parseExpression(const vector<Token> &tokens, size_t &i);
 };
 
 #endif

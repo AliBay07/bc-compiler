@@ -11,7 +11,7 @@
 
 class CodeGenerator {
 public:
-    std::string generate(const ParseNode& parseTree, const std::map<std::string, std::string>& allocations);
+    static void generate(const ParseNode& parseTree, const std::map<std::string, std::string>& allocations, const std::string& outputFile);
 };
 
 #endif

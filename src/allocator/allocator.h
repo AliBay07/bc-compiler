@@ -11,7 +11,7 @@
 
 class Allocator {
 public:
-    std::map<std::string, std::string> allocate(const ParseNode& parseTree);
+    static map<string, string> allocate(ParseNode &parseTree);
 };
 
 #endif

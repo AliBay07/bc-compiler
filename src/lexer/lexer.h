@@ -13,8 +13,10 @@
 using namespace std;
 
 class Lexer {
+private:
+    static void printTokens(const vector<Token>& tokens);
 public:
-    vector<Token> lex(const string& code);
+    static vector<Token> lex(const string& code);
 };
 
 #endif

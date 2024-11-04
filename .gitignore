@@ -2,6 +2,15 @@
 .idea/
 cmake-build-debug/
 
+#Docs
+docs/
+
+#Build
+build/bcc
+
+#Test Files
+test_files/*.s
+
 # Prerequisites
 *.d
 

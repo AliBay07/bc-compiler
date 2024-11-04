@@ -1,15 +1,21 @@
 //
 // Created by ali on 10/26/24.
 //
+//
+// Created by ali on 10/26/24.
+//
+
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <filesystem>
 #include "lexer/lexer.h"
 #include "parser/parser.h"
 #include "allocator/allocator.h"
 #include "generator/generator.h"
 
 using namespace std;
+namespace fs = std::filesystem;
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
@@ -32,17 +38,19 @@ int main(int argc, char* argv[]) {
     string code((istreambuf_iterator<char>(file)), istreambuf_iterator<char>());
     file.close();
 
-    Lexer lexer;
-    Parser parser;
-    Allocator allocator;
-    CodeGenerator codeGen;
+    auto tokens = Lexer::lex(code);
+    auto parseTree = Parser::parse(tokens);
+    auto allocations = Allocator::allocate(parseTree);
 
-    auto tokens = lexer.lex(code);
-    auto parseTree = parser.parse(tokens);
-    auto allocations = allocator.allocate(parseTree);
-    auto assemblyCode = codeGen.generate(parseTree, allocations);
+    fs::path inputPath(filename);
+    string filenameWithoutExt = inputPath.stem().string();
+    string outputFile = (inputPath.parent_path() / (filenameWithoutExt + ".s")).string();
 
-    cout << "Compilation successful!\n";
+    CodeGenerator::generate(parseTree, allocations, outputFile);
+
+    cout << "\nGenerated ARM Assembly Code in " << filenameWithoutExt + ".s" << endl;
     return 0;
 }
+
+
 
