@@ -15,7 +15,7 @@ ARGS := -s test_files/test_addition.bc
 SRCS := $(wildcard $(SRC_DIR)/*.c)
 OBJS := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS))
 
-.PHONY: all clean run
+.PHONY: all clean run test
 
 all: $(TARGET)
 
@@ -36,6 +36,9 @@ $(TARGET): $(OBJS) | $(BUILD_DIR)
 
 run: all
 	$(TARGET)
+
+test: all
+	cd scripts && ./run_tests.sh
 
 clean:
 	rm -rf $(BUILD_DIR)

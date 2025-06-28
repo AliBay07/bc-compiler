@@ -26,7 +26,8 @@ typedef enum {
   NODE_INT_LITERAL,
   NODE_VAR_INT_TYPE,
   NODE_RETURN_INT_TYPE,
-  NODE_IDENTIFIER
+  NODE_IDENTIFIER,
+  NODE_ASSIGNMENT
 } NodeType;
 
 /**
@@ -38,6 +39,7 @@ typedef struct ASTNode {
   struct ASTNode **children;
   size_t child_count;
   int register_assigned;  // Assigned register index or -1 if none
+  int source_register; // Source register for the value (if applicable)
   int scope_depth;        // Optional: scope depth for future use
   bool requires_load;  // Load from stack into register before use
   bool requires_store; // Store to stack from register after assignment

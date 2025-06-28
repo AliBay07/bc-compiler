@@ -27,7 +27,7 @@ static char peek(const Lexer *lexer) {
 
 static void skip_whitespace(Lexer *lexer) {
     while (true) {
-        char c = peek(lexer);
+        const char c = peek(lexer);
         switch (c) {
             case ' ':
             case '\r':
@@ -61,7 +61,7 @@ static Token identifier(Lexer *lexer) {
     while (isalnum(peek(lexer)) || peek(lexer) == '_') {
         advance(lexer);
     }
-    size_t length = lexer->current - lexer->start;
+    const size_t length = lexer->current - lexer->start;
     char *lexeme = malloc(length + 1);
     if (!lexeme) {
         return token_create_error(strdup("Out of memory"), lexer->line);
@@ -73,12 +73,12 @@ static Token identifier(Lexer *lexer) {
         const char *keyword;
         TokenType type;
     } keywords[] = {
-        {"fun", TOKEN_FUN},
-        {"int", TOKEN_INT},
-        {"return", TOKEN_RETURN},
-        {"let", TOKEN_LET},
-        {NULL, TOKEN_IDENTIFIER}
-    };
+                {"fun", TOKEN_FUN},
+                {"int", TOKEN_INT},
+                {"return", TOKEN_RETURN},
+                {"let", TOKEN_LET},
+                {NULL, TOKEN_IDENTIFIER}
+            };
 
     for (size_t i = 0; keywords[i].keyword; i++) {
         if (strcmp(lexeme, keywords[i].keyword) == 0) {
@@ -92,7 +92,7 @@ static Token number(Lexer *lexer) {
     while (isdigit(peek(lexer))) {
         advance(lexer);
     }
-    size_t length = lexer->current - lexer->start;
+    const size_t length = lexer->current - lexer->start;
     char *lexeme = malloc(length + 1);
     if (!lexeme) {
         return token_create_error(strdup("Out of memory"), lexer->line);
@@ -101,9 +101,9 @@ static Token number(Lexer *lexer) {
     lexeme[length] = '\0';
 
     char *end;
-    int64_t value = strtoll(lexeme, &end, 10);
+    const int64_t value = strtoll(lexeme, &end, 10);
     if (*end != '\0') {
-        size_t msg_len = 32 + length;
+        const size_t msg_len = 32 + length;
         char *error = malloc(msg_len);
         if (!error) {
             free(lexeme);
@@ -111,7 +111,7 @@ static Token number(Lexer *lexer) {
         }
         snprintf(error, msg_len, "Invalid integer literal '%s'", lexeme);
         free(lexeme);
-        Token tok = token_create_error(error, lexer->line);
+        const Token tok = token_create_error(error, lexer->line);
         free(error);
         return tok;
     }
@@ -130,7 +130,7 @@ Lexer lexer_create(const char *source) {
 
 void token_stream_add(TokenStream *stream, Token token) {
     if (stream->count >= stream->capacity) {
-        size_t new_capacity = stream->capacity ? stream->capacity * 2 : 16;
+        const size_t new_capacity = stream->capacity ? stream->capacity * 2 : 16;
         Token *new_tokens = realloc(stream->tokens, new_capacity * sizeof(Token));
         if (!new_tokens) {
             fprintf(stderr, "Fatal error: Token stream allocation failed\n");

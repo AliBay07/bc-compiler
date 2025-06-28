@@ -8,7 +8,6 @@
  */
 
 #define _POSIX_C_SOURCE 200809L
-
 #include "../include/lexer.h"
 #include "../include/parser.h"
 #include "../include/register_allocator.h"
@@ -25,7 +24,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <errno.h>
 
 #define COMPILER_NAME "BasicCodeCompiler (bcc)"
 #define VERSION_MAJOR 0
@@ -101,23 +99,24 @@ static void print_version(void) {
  */
 static void print_usage(const char *program_name) {
     fprintf(stderr,
-        "Usage: %s [options] <input-file>\n"
-        "Options:\n"
-        "  -h, --help            Show this help message\n"
-        "  -v, --version         Show version information\n"
-        "  -t, --tokens          Display token stream\n"
-        "  -a, --ast             Display abstract syntax tree\n"
-        "  -r, --arch=<arch>     Specify target architecture (ARM)\n"
-        "  -s, --save-assembly   Save the generated assembly file\n"
-        "  -o <output>           Specify name of the output executable\n",
-        program_name);
+            "Usage: %s [options] <input-file>\n"
+            "Options:\n"
+            "  -h, --help            Show this help message\n"
+            "  -v, --version         Show version information\n"
+            "  -t, --tokens          Display token stream\n"
+            "  -a, --ast             Display abstract syntax tree\n"
+            "  -g, --show-registers  Show register allocation details\n"
+            "  -r, --arch=<arch>     Specify target architecture (ARM)\n"
+            "  -s, --save-assembly   Save the generated assembly file\n"
+            "  -o <output>           Specify name of the output executable\n",
+            program_name);
 }
 
 /**
  * @brief Removes the file extension from a filename string in-place.
  * @param filename The filename string to modify.
  */
-static void strip_extension(char *filename) {
+static void strip_extension(const char *filename) {
     char *dot = strrchr(filename, '.');
     if (dot) *dot = '\0';
 }
@@ -129,9 +128,9 @@ static void strip_extension(char *filename) {
  * @param err Pointer to ErrorCode to store any error.
  * @return CompilerOptions struct with parsed options.
  */
-static CompilerOptions parse_options(int argc, char *argv[], ErrorCode *err) {
+static CompilerOptions parse_options(const int argc, char *argv[], ErrorCode *err) {
     CompilerOptions options = {0};
-    options.target_arch = ARCH_ARM; // Default architecture
+    options.target_arch = ARCH_ARM;
     *err = ERR_OK;
 
     static struct option long_options[] = {
@@ -139,18 +138,24 @@ static CompilerOptions parse_options(int argc, char *argv[], ErrorCode *err) {
         {"version", no_argument, 0, 'v'},
         {"tokens", no_argument, 0, 't'},
         {"ast", no_argument, 0, 'a'},
+        {"output", required_argument, 0, 'o'},
+        {"show-registers", no_argument, 0, 'g'},
         {"arch", required_argument, 0, 'r'},
         {"save-assembly", no_argument, 0, 's'},
         {0, 0, 0, 0}
     };
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "hvtsao:r:", long_options, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, "hvtagr:so:", long_options, NULL)) != -1) {
         switch (opt) {
-            case 'h': print_usage(argv[0]); exit(EXIT_SUCCESS);
-            case 'v': print_version(); exit(EXIT_SUCCESS);
-            case 't': options.show_tokens = true; break;
-            case 'a': options.show_ast = true; break;
+            case 'h': print_usage(argv[0]);
+                exit(EXIT_SUCCESS);
+            case 'v': print_version();
+                exit(EXIT_SUCCESS);
+            case 't': options.show_tokens = true;
+                break;
+            case 'a': options.show_ast = true;
+                break;
             case 'r':
                 if (strcasecmp(optarg, "ARM") == 0) {
                     options.target_arch = ARCH_ARM;
@@ -160,20 +165,24 @@ static CompilerOptions parse_options(int argc, char *argv[], ErrorCode *err) {
                     return options;
                 }
                 break;
-            case 's': options.save_asm = true; break;
-            case 'o': strncpy(options.output_name, optarg, sizeof(options.output_name) - 1); break;
-            default: *err = ERR_UNKNOWN_OPTION; return options;
+            case 's': options.save_asm = true;
+                break;
+            case 'o': strncpy(options.output_name, optarg, sizeof(options.output_name) - 1);
+                break;
+            case 'g': options.show_registers = true;
+                break;
+            default: *err = ERR_UNKNOWN_OPTION;
+                return options;
         }
     }
 
     if (optind < argc) {
         options.filename = argv[optind];
         if (options.output_name[0] == '\0') {
-            // Derive output_name from filename base (no extension)
             char temp[256];
             strncpy(temp, options.filename, sizeof(temp) - 1);
             temp[sizeof(temp) - 1] = '\0';
-            char *base = basename(temp);
+            const char *base = basename(temp);
             strncpy(options.output_name, base, sizeof(options.output_name) - 1);
             options.output_name[sizeof(options.output_name) - 1] = '\0';
         }
@@ -202,7 +211,7 @@ static int read_file(const char *filename, char **buffer, size_t *size) {
         return ERR_FILE_SEEK;
     }
 
-    long file_size = ftell(file);
+    const long file_size = ftell(file);
     if (file_size < 0) {
         fclose(file);
         return ERR_FILE_TELL;
@@ -219,10 +228,10 @@ static int read_file(const char *filename, char **buffer, size_t *size) {
         return ERR_MEM_ALLOC;
     }
 
-    size_t read_bytes = fread(*buffer, 1, file_size, file);
+    const size_t read_bytes = fread(*buffer, 1, file_size, file);
     fclose(file);
 
-    if (read_bytes != (size_t)file_size) {
+    if (read_bytes != (size_t) file_size) {
         free(*buffer);
         return ERR_FILE_READ;
     }
@@ -238,7 +247,7 @@ static int read_file(const char *filename, char **buffer, size_t *size) {
  * @return Status code from system() call.
  */
 static int run_command(const char *cmd) {
-    int status = system(cmd);
+    const int status = system(cmd);
     if (status != 0) {
         fprintf(stderr, "Command failed: %s\n", cmd);
     }
@@ -266,7 +275,7 @@ static void token_stream_cleanup(TokenStream *stream) {
 static void print_token_stream(const TokenStream *stream) {
     printf("\nToken Stream:\n========================================\n");
     for (size_t i = 0; i < stream->count; i++) {
-        Token token = stream->tokens[i];
+        const Token token = stream->tokens[i];
         printf("%-12s Line %-3d", token_type_to_string(token.type), token.line);
         if (token.lexeme) printf(" '%s'", token.lexeme);
         printf("\n");
@@ -300,7 +309,7 @@ static int lex_phase(const char *source, TokenStream *stream) {
     int error_count = 0;
 
     while (true) {
-        Token token = lexer_next_token(&lexer);
+        const Token token = lexer_next_token(&lexer);
         token_stream_add(stream, token);
         if (token.type == TOKEN_ERROR) error_count++;
         if (token.type == TOKEN_EOF) break;
@@ -317,7 +326,7 @@ static int lex_phase(const char *source, TokenStream *stream) {
  */
 static int parse_phase(CompilationContext *ctx, bool show_ast) {
     Parser parser = parser_create(ctx->token_stream);
-    int error_count = parse(&parser);
+    const int error_count = parse(&parser);
 
     if (error_count == 0) {
         ctx->ast_root = parser.ast_root;
@@ -355,7 +364,7 @@ static int compile_file(const CompilerOptions *opts) {
     CompilationContext ctx = {0};
     TokenStream tokens = {0};
 
-    int lex_errors = lex_phase(source, &tokens);
+    const int lex_errors = lex_phase(source, &tokens);
     free(source);
 
     if (lex_errors > 0) {
@@ -391,7 +400,7 @@ static int compile_file(const CompilerOptions *opts) {
         }
 
         // Redirect stdout to assembly output file to capture codegen output
-        int saved_stdout = dup(fileno(stdout));
+        const int saved_stdout = dup(fileno(stdout));
         fflush(stdout);
         dup2(fileno(asm_out), fileno(stdout));
 
@@ -429,9 +438,9 @@ static int compile_file(const CompilerOptions *opts) {
 /**
  * @brief Program entry point.
  */
-int main(int argc, char *argv[]) {
+int main(const int argc, char *argv[]) {
     ErrorCode err;
-    CompilerOptions opts = parse_options(argc, argv, &err);
+    const CompilerOptions opts = parse_options(argc, argv, &err);
 
     if (err != ERR_OK || !opts.filename) {
         print_usage(argv[0]);

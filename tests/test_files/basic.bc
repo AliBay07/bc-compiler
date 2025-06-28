@@ -1,0 +1,5 @@
+fun main<a: int, b: int>(): int {
+    let x<int> = 1;
+    print(x);
+    return 0;
+}

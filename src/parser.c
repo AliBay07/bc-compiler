@@ -14,6 +14,7 @@
 
 /* Forward declarations for recursive parsing */
 static ASTNode *parse_expression(Parser *parser);
+
 static ASTNode *parse_statement(Parser *parser);
 
 /* Helper to check end of token stream */
@@ -22,7 +23,7 @@ static bool is_at_end(const Parser *parser) {
 }
 
 /* Match and consume token if it matches given type */
-static bool match(Parser *parser, TokenType type) {
+static bool match(Parser *parser, const TokenType type) {
     if (!is_at_end(parser) && CURRENT_TOKEN.type == type) {
         ADVANCE_TOKEN;
         return true;
@@ -31,12 +32,12 @@ static bool match(Parser *parser, TokenType type) {
 }
 
 /* Peek to check token type without consuming */
-static bool peek(const Parser *parser, TokenType type) {
+static bool peek(const Parser *parser, const TokenType type) {
     return !is_at_end(parser) && CURRENT_TOKEN.type == type;
 }
 
 /* Create a new AST node with token info */
-static ASTNode *create_node(NodeType type, Token token) {
+static ASTNode *create_node(const NodeType type, const Token token) {
     ASTNode *node = malloc(sizeof(ASTNode));
     if (!node) {
         fprintf(stderr, "Memory allocation failed in create_node\n");
@@ -47,6 +48,7 @@ static ASTNode *create_node(NodeType type, Token token) {
     node->children = NULL;
     node->child_count = 0;
     node->register_assigned = -1;
+    node->source_register = -1;
     node->scope_depth = 0;
     return node;
 }
@@ -93,7 +95,7 @@ static ASTNode *parse_type(Parser *parser) {
 }
 
 /* Expect a token of a given type, error if not found */
-static bool expect_token(Parser *parser, TokenType type, const char *err_msg) {
+static bool expect_token(Parser *parser, const TokenType type, const char *err_msg) {
     if (!is_at_end(parser) && CURRENT_TOKEN.type == type) {
         ADVANCE_TOKEN;
         return true;
@@ -138,7 +140,7 @@ static void parse_generic_params(Parser *parser, ASTNode *parent) {
 
 /* Parse a variable declaration */
 static ASTNode *parse_variable_decl(Parser *parser) {
-    ASTNode *var_node = create_node(NODE_VAR_DECL, CURRENT_TOKEN); // 'let' token
+    ASTNode *var_node = create_node(NODE_VAR_DECL, CURRENT_TOKEN);
     ADVANCE_TOKEN;
 
     if (!peek(parser, TOKEN_IDENTIFIER)) {
@@ -196,7 +198,7 @@ static ASTNode *parse_return_type(Parser *parser) {
 
 /* Parse a function definition */
 static ASTNode *parse_function(Parser *parser) {
-    Token fun_token = CURRENT_TOKEN;
+    const Token fun_token = CURRENT_TOKEN;
     ADVANCE_TOKEN;
 
     if (!peek(parser, TOKEN_IDENTIFIER)) {
@@ -248,7 +250,7 @@ static ASTNode *parse_function(Parser *parser) {
     return func_node;
 }
 
-/* Parse primary expressions: integer literals or identifiers (with optional function call) */
+/* Parse primary expressions: integer literals, identifiers or function calls */
 static ASTNode *parse_primary(Parser *parser) {
     if (peek(parser, TOKEN_INTEGER)) {
         ASTNode *int_node = create_node(NODE_INT_LITERAL, CURRENT_TOKEN);
@@ -261,13 +263,13 @@ static ASTNode *parse_primary(Parser *parser) {
             free_ast(int_node);
             return NULL;
         }
-        int_node->token.literal.int_value = (int)int_val;
+        int_node->token.literal.int_value = (int) int_val;
         ADVANCE_TOKEN;
         return int_node;
     }
 
     if (peek(parser, TOKEN_IDENTIFIER)) {
-        Token id_token = CURRENT_TOKEN;
+        const Token id_token = CURRENT_TOKEN;
         ADVANCE_TOKEN;
 
         if (peek(parser, TOKEN_LPAREN)) {
@@ -348,6 +350,36 @@ static ASTNode *parse_statement(Parser *parser) {
         return return_node;
     }
 
+    // Handle assignment: identifier = expression;
+    if (peek(parser, TOKEN_IDENTIFIER)) {
+        const Token id_token = CURRENT_TOKEN;
+        ADVANCE_TOKEN;
+
+        if (peek(parser, TOKEN_EQUAL)) {
+            ADVANCE_TOKEN; // consume '='
+
+            ASTNode *assign_node = create_node(NODE_ASSIGNMENT, id_token);
+            ASTNode *lhs = create_node(NODE_IDENTIFIER, id_token);
+            ASTNode *rhs = parse_expression(parser);
+            if (!rhs) {
+                free_ast(assign_node);
+                return NULL;
+            }
+
+            add_child_node(assign_node, lhs);
+            add_child_node(assign_node, rhs);
+
+            if (!expect_token(parser, TOKEN_SEMI, "Expected ';' after assignment")) {
+                free_ast(assign_node);
+                return NULL;
+            }
+
+            return assign_node;
+        }
+        // Fallback: expression statement starting with identifier
+        parser->current--; // Rewind
+    }
+
     ASTNode *expr = parse_expression(parser);
     if (expr && expect_token(parser, TOKEN_SEMI, "Expected ';' after expression statement")) {
         ASTNode *expr_stmt = create_node(NODE_EXPRESSION, (Token){0});
@@ -359,25 +391,41 @@ static ASTNode *parse_statement(Parser *parser) {
     return NULL;
 }
 
+
 /* Pretty-print AST nodes recursively */
-void print_ast(const ASTNode *node, int depth) {
+void print_ast(const ASTNode *node, const int depth) {
     const char *type_str = "Unknown";
     const char *val_str = node->token.lexeme ? node->token.lexeme : "";
 
     switch (node->type) {
-        case NODE_COMPILATION_UNIT: type_str = "CompilationUnit"; break;
-        case NODE_FUNCTION:         type_str = "Function"; break;
-        case NODE_FUNCTION_CALL:    type_str = "FunctionCall"; break;
-        case NODE_VAR_DECL:         type_str = "VarDecl"; break;
-        case NODE_RETURN:           type_str = "Return"; break;
-        case NODE_TYPE_PARAM:       type_str = "TypeParam"; break;
-        case NODE_EXPRESSION:       type_str = "Expression"; break;
-        case NODE_ADD:              type_str = "Add"; break;
-        case NODE_INT_LITERAL:      type_str = "IntLiteral"; break;
-        case NODE_VAR_INT_TYPE:     type_str = "VarIntType"; break;
-        case NODE_RETURN_INT_TYPE:  type_str = "ReturnIntType"; break;
-        case NODE_IDENTIFIER:       type_str = "Identifier"; break;
-        default:                    type_str = "Unknown"; break;
+        case NODE_COMPILATION_UNIT: type_str = "CompilationUnit";
+            break;
+        case NODE_FUNCTION: type_str = "\nFunction";
+            break;
+        case NODE_FUNCTION_CALL: type_str = "FunctionCall";
+            break;
+        case NODE_VAR_DECL: type_str = "VarDecl";
+            break;
+        case NODE_RETURN: type_str = "Return";
+            break;
+        case NODE_TYPE_PARAM: type_str = "TypeParam";
+            break;
+        case NODE_EXPRESSION: type_str = "Expression";
+            break;
+        case NODE_ADD: type_str = "Add";
+            break;
+        case NODE_INT_LITERAL: type_str = "IntLiteral";
+            break;
+        case NODE_VAR_INT_TYPE: type_str = "VarIntType";
+            break;
+        case NODE_RETURN_INT_TYPE: type_str = "ReturnIntType";
+            break;
+        case NODE_IDENTIFIER: type_str = "Identifier";
+            break;
+        case NODE_ASSIGNMENT: type_str = "Assignment";
+            break;
+        default: type_str = "Unknown";
+            break;
     }
 
     printf("%*s%s", depth * 2, "", type_str);

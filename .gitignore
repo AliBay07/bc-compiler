@@ -9,6 +9,8 @@ docs/
 build
 
 #Test Files
+bc_files/
+tests/failed_assemblies/
 *.s
 
 # Prerequisites
