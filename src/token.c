@@ -5,7 +5,6 @@
 
 #include "../include/token.h"
 #include <stdlib.h>
-#include <string.h>
 #include <stdio.h>
 #include <stddef.h>
 
@@ -71,6 +70,7 @@ const char *token_type_to_string(const TokenType type) {
         case TOKEN_LET:        return "LET";
         case TOKEN_IDENTIFIER: return "IDENTIFIER";
         case TOKEN_INTEGER:    return "INTEGER";
+        case TOKEN_IMPORT:     return "IMPORT";
         case TOKEN_LANGLE:     return "<";
         case TOKEN_RANGLE:     return ">";
         case TOKEN_LPAREN:     return "(";
@@ -82,6 +82,8 @@ const char *token_type_to_string(const TokenType type) {
         case TOKEN_SEMI:       return ";";
         case TOKEN_EQUAL:      return "=";
         case TOKEN_PLUS:       return "+";
+        case TOKEN_DOT:        return ".";
+        case TOKEN_SLASH:      return "/";
         case TOKEN_EOF:        return "EOF";
         case TOKEN_ERROR:      return "ERROR";
         default:               return "UNKNOWN";

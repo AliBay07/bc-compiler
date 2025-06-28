@@ -27,7 +27,7 @@
 
 #define COMPILER_NAME "BasicCodeCompiler (bcc)"
 #define VERSION_MAJOR 0
-#define VERSION_MINOR 1
+#define VERSION_MINOR 2
 #define VERSION_PATCH 0
 #define MAX_FILE_SIZE (1024 * 1024) // 1MB
 
@@ -368,6 +368,12 @@ static int compile_file(const CompilerOptions *opts) {
     free(source);
 
     if (lex_errors > 0) {
+        for (size_t i = 0; i < tokens.count; ++i) {
+            if (tokens.tokens[i].type == TOKEN_ERROR) {
+                printf("Lexer Error (Line %d): %s\n", tokens.tokens[i].line,
+                    tokens.tokens[i].literal.error_message);
+            }
+        }
         fprintf(stderr, "Lexical errors: %d\n", lex_errors);
         token_stream_cleanup(&tokens);
         return ERR_LEXICAL;

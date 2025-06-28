@@ -77,6 +77,7 @@ static Token identifier(Lexer *lexer) {
                 {"int", TOKEN_INT},
                 {"return", TOKEN_RETURN},
                 {"let", TOKEN_LET},
+                {"import", TOKEN_IMPORT},
                 {NULL, TOKEN_IDENTIFIER}
             };
 
@@ -172,6 +173,35 @@ Token lexer_next_token(Lexer *lexer) {
         case ';': return token_create(TOKEN_SEMI, make_single_char_lexeme(c), lexer->line);
         case '=': return token_create(TOKEN_EQUAL, make_single_char_lexeme(c), lexer->line);
         case '+': return token_create(TOKEN_PLUS, make_single_char_lexeme(c), lexer->line);
+        case '.': return token_create(TOKEN_DOT, make_single_char_lexeme(c), lexer->line);
+        case '/': {
+            if (peek(lexer) == '/') {
+                // Single-line comment
+                while (peek(lexer) != '\n' && !is_at_end(lexer)) {
+                    advance(lexer);
+                }
+                lexer->line++;
+                return lexer_next_token(lexer); // Recurse to get next token
+            }
+            if (peek(lexer) == '*') {
+                // Multi-line comment
+                advance(lexer); // Consume '*'
+                while (!is_at_end(lexer)) {
+                    if (peek(lexer) == '*') {
+                        advance(lexer); // Consume '*'
+                        if (peek(lexer) == '/') {
+                            advance(lexer); // Consume '/'
+                            return lexer_next_token(lexer);
+                        }
+                        return token_create_error(strdup("Unterminated multi-line comment"), lexer->line);
+                    }
+                    if (peek(lexer) == '\n') lexer->line++;
+                    advance(lexer);
+                }
+                return token_create_error(strdup("Unterminated multi-line comment"), lexer->line);
+            }
+            return token_create(TOKEN_SLASH, make_single_char_lexeme(c), lexer->line);
+        }
         default: {
             char error_msg[32];
             snprintf(error_msg, sizeof(error_msg), "Unexpected character '%c'", c);

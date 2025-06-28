@@ -16,6 +16,7 @@
  */
 typedef enum {
   NODE_COMPILATION_UNIT,
+  NODE_IMPORT,
   NODE_FUNCTION,
   NODE_FUNCTION_CALL,
   NODE_VAR_DECL,
@@ -54,6 +55,11 @@ typedef struct {
   size_t current;
   size_t error_count;
   ASTNode *ast_root;
+
+  // Import tracking
+  char **import_paths;   // Array of dynamically allocated strings
+  size_t import_count;   // Number of imports
+  size_t import_capacity;// Allocated capacity
 } Parser;
 
 /**

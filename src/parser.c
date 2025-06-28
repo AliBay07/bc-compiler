@@ -3,11 +3,13 @@
  * @brief Recursive descent parser implementation with AST generation for BasicCodeCompiler
  */
 
+#define _POSIX_C_SOURCE 200809L
 #include "../include/parser.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <string.h>
 
 #define CURRENT_TOKEN (parser->tokens->tokens[parser->current])
 #define ADVANCE_TOKEN (parser->current++)
@@ -394,7 +396,7 @@ static ASTNode *parse_statement(Parser *parser) {
 
 /* Pretty-print AST nodes recursively */
 void print_ast(const ASTNode *node, const int depth) {
-    const char *type_str = "Unknown";
+    const char *type_str;
     const char *val_str = node->token.lexeme ? node->token.lexeme : "";
 
     switch (node->type) {
@@ -407,6 +409,8 @@ void print_ast(const ASTNode *node, const int depth) {
         case NODE_VAR_DECL: type_str = "VarDecl";
             break;
         case NODE_RETURN: type_str = "Return";
+            break;
+        case NODE_IMPORT: type_str = "Import";
             break;
         case NODE_TYPE_PARAM: type_str = "TypeParam";
             break;
@@ -437,12 +441,89 @@ void print_ast(const ASTNode *node, const int depth) {
     }
 }
 
-/* Top-level parse function: expects one or more functions */
+/* Helper to add an import path to the parser's list */
+static void add_import_path(Parser *parser, const char *path) {
+    if (parser->import_count == parser->import_capacity) {
+        const size_t new_cap = parser->import_capacity ? parser->import_capacity * 2 : 8;
+        char **new_paths = realloc(parser->import_paths, new_cap * sizeof(char *));
+        if (!new_paths) {
+            fprintf(stderr, "Memory allocation failed in add_import_path\n");
+            exit(EXIT_FAILURE);
+        }
+        parser->import_paths = new_paths;
+        parser->import_capacity = new_cap;
+    }
+    parser->import_paths[parser->import_count++] = strdup(path);
+}
+
+/* Parse an import statement: 'import <path>' */
+static void parse_import(Parser *parser) {
+    ADVANCE_TOKEN; // consume 'import'
+    if (!expect_token(parser, TOKEN_LANGLE, "Expected '<' after 'import'")) return;
+
+    // Build the import path
+    size_t path_cap = 64, path_len = 0;
+    char *path = malloc(path_cap);
+    if (!path) {
+        parse_error(parser, "Out of memory while parsing import path");
+        return;
+    }
+    path[0] = '\0';
+
+    bool first = true;
+    while (!peek(parser, TOKEN_RANGLE) && !is_at_end(parser)) {
+        if (peek(parser, TOKEN_IDENTIFIER) || peek(parser, TOKEN_DOT) || peek(parser, TOKEN_SLASH)) {
+            const char *lex = CURRENT_TOKEN.lexeme;
+            size_t lex_len = strlen(lex);
+            if (path_len + lex_len + 1 >= path_cap) {
+                path_cap *= 2;
+                char *new_path = realloc(path, path_cap);
+                if (!new_path) {
+                    free(path);
+                    parse_error(parser, "Out of memory while parsing import path");
+                    return;
+                }
+                path = new_path;
+            }
+            strcat(path, lex);
+            path_len += lex_len;
+            ADVANCE_TOKEN;
+            first = false;
+        } else {
+            free(path);
+            parse_error(parser, "Expected '>' after import path");
+            return;
+        }
+    }
+
+    if (first) {
+        free(path);
+        parse_error(parser, "Expected file path after 'import<'");
+        return;
+    }
+
+    add_import_path(parser, path);
+
+    // Create AST node for import
+    ASTNode *import_node = create_node(NODE_IMPORT, (Token){0});
+    const Token id_token = { .type = TOKEN_IDENTIFIER, .lexeme = strdup(path), .line = CURRENT_TOKEN.line };
+    ASTNode *id_node = create_node(NODE_IDENTIFIER, id_token);
+    add_child_node(import_node, id_node);
+    add_child_node(parser->ast_root, import_node);
+
+    free(path);
+
+    if (!expect_token(parser, TOKEN_RANGLE, "Expected '>' after import path")) return;
+}
+
+/* Top-level parse function: expects imports and/or functions */
 int parse(Parser *parser) {
     parser->ast_root = create_node(NODE_COMPILATION_UNIT, (Token){0});
 
     while (!is_at_end(parser)) {
-        if (peek(parser, TOKEN_FUN)) {
+        if (peek(parser, TOKEN_IMPORT)) {
+            parse_import(parser);
+        } else if (peek(parser, TOKEN_FUN)) {
             ASTNode *func = parse_function(parser);
             if (func) {
                 add_child_node(parser->ast_root, func);
@@ -450,7 +531,7 @@ int parse(Parser *parser) {
         } else if (peek(parser, TOKEN_EOF)) {
             break;
         } else {
-            parse_error(parser, "Top-level declaration must be a function");
+            parse_error(parser, "Top-level declaration must be a function or import");
             ADVANCE_TOKEN;
         }
     }
