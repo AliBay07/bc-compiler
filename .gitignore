@@ -6,10 +6,10 @@ cmake-build-debug/
 docs/
 
 #Build
-build/bcc
+build
 
 #Test Files
-test_files/*.s
+*.s
 
 # Prerequisites
 *.d
@@ -43,3 +43,4 @@ test_files/*.s
 *.exe
 *.out
 *.app
+*.elf

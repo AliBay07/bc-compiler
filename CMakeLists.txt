@@ -1,7 +1,19 @@
-cmake_minimum_required(VERSION 3.22)
-project(B)
+cmake_minimum_required(VERSION 3.30)
+project(b_compiler C)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_C_STANDARD 11)
 
-add_executable(bcc src/b-compiler.cpp src/lexer/lexer.cpp src/parser/parser.cpp src/allocator/allocator.cpp src/generator/generator.cpp)
+include_directories(include)
 
+add_executable(b_compiler
+    include/codegen_arm.h
+    include/lexer.h
+    include/parser.h
+    include/register_allocator.h
+    include/token.h
+    src/codegen_arm.c
+    src/lexer.c
+    src/main.c
+    src/parser.c
+    src/register_allocator.c
+    src/token.c)

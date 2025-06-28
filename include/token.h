@@ -1,81 +1,102 @@
-//
-// Created by ali on 10/26/24.
-//
+/**
+ * @file token.h
+ * @brief Token definitions and utilities for lexical analysis.
+ */
 
 #ifndef TOKEN_H
 #define TOKEN_H
 
-#include <string>
-#include <utility>
-#include <ostream>
-#include <iostream>
-#include <optional>
+#include <stdint.h>
 
-using namespace std;
+/**
+ * @enum TokenType
+ * @brief Enumeration of token types used in the lexer.
+ */
+typedef enum {
+    // Keywords
+    TOKEN_FUN,
+    TOKEN_INT,
+    TOKEN_RETURN,
+    TOKEN_LET,
 
-enum class TokenType {
-    INTEGER,           // Integer literals
-    IDENTIFIER,        // Variable names
-    OPERATOR,          // +, -, *, /, etc.
-    PARENTHESIS_OPEN,  // (
-    PARENTHESIS_CLOSE, // )
-    KEYWORD,           // Keywords like 'if', 'while', etc.
-    FUNCTION,          // Function keyword
-    TYPE,              // Return type of functions (e.g., int)
-    COMMA,             // Separator for parameters
-    SEMICOLON,         // ;
-    CURLY_OPEN,        // {
-    CURLY_CLOSE,       // }
-    END_OF_FILE        // Indicates the end of input
-};
+    // Identifiers and literals
+    TOKEN_IDENTIFIER,
+    TOKEN_INTEGER,
 
-class Token {
-public:
-    TokenType type; // Token type
-    optional<string> value; // Token value (e.g., function/variable names)
-    optional<string> returnType; // For function return types
-    optional<string> varType;    // For variable types (e.g., int, float)
-    int line; // Line number of the token
+    // Punctuation and operators
+    TOKEN_LANGLE,   // <
+    TOKEN_RANGLE,   // >
+    TOKEN_LPAREN,   // (
+    TOKEN_RPAREN,   // )
+    TOKEN_LBRACE,   // {
+    TOKEN_RBRACE,   // }
+    TOKEN_COLON,    // :
+    TOKEN_COMMA,    // ,
+    TOKEN_SEMI,     // ;
+    TOKEN_EQUAL,    // =
+    TOKEN_PLUS,     // +
 
-    explicit Token(TokenType type, int line, optional<string> value = {}, optional<string> returnType = {},
-                   optional<string> varType = {})
-            : type(type), value(std::move(value)), returnType(std::move(returnType)),
-              varType(std::move(varType)), line(line) {}
+    // Special tokens
+    TOKEN_EOF,
+    TOKEN_ERROR
+} TokenType;
 
-    void setType(TokenType t) { type = t; }
-    void setValue(const optional<string>& val) { value = val; }
-    void setReturnType(const optional<string>& retType) { returnType = retType; }
-    void setVarType(const optional<string>& varT) { varType = varT; }
+/**
+ * @struct Token
+ * @brief Represents a lexical token with optional literal data.
+ *
+ * The `lexeme` string and `error_message` are owned by the token and
+ * should be freed by `token_cleanup`.
+ */
+typedef struct {
+    TokenType type;
+    char *lexeme;   ///< Dynamically allocated string representing the token text; may be NULL.
+    int line;       ///< Source code line number where the token appears.
+    union {
+        int64_t int_value;       ///< Integer value for TOKEN_INTEGER.
+        char *error_message;     ///< Dynamically allocated error message for TOKEN_ERROR.
+    } literal;
+} Token;
 
-    friend ostream &operator<<(ostream &os, const Token &token) {
-        os << "Token(Type: ";
+/**
+ * @brief Creates a generic token.
+ * @param type Token type.
+ * @param lexeme Dynamically allocated lexeme string, ownership transferred to token.
+ * @param line Source line number.
+ * @return Initialized Token struct.
+ */
+Token token_create(TokenType type, char *lexeme, int line);
 
-        switch (token.type) {
-            case TokenType::INTEGER: os << "INTEGER"; break;
-            case TokenType::IDENTIFIER: os << "IDENTIFIER"; break;
-            case TokenType::OPERATOR: os << "OPERATOR"; break;
-            case TokenType::PARENTHESIS_OPEN: os << "PARENTHESIS_OPEN"; break;
-            case TokenType::PARENTHESIS_CLOSE: os << "PARENTHESIS_CLOSE"; break;
-            case TokenType::KEYWORD: os << "KEYWORD"; break;
-            case TokenType::FUNCTION: os << "FUNCTION"; break;
-            case TokenType::TYPE: os << "TYPE"; break;
-            case TokenType::COMMA: os << "COMMA"; break;
-            case TokenType::CURLY_OPEN: os << "CURLY_OPEN"; break;
-            case TokenType::CURLY_CLOSE: os << "CURLY_CLOSE"; break;
-            case TokenType::END_OF_FILE: os << "END_OF_FILE"; break;
-            case TokenType::SEMICOLON: os << "SEMICOLON"; break;
-        }
+/**
+ * @brief Creates an integer token.
+ * @param value Integer value.
+ * @param lexeme Dynamically allocated lexeme string, ownership transferred.
+ * @param line Source line number.
+ * @return Initialized Token struct.
+ */
+Token token_create_int(int64_t value, char *lexeme, int line);
 
-        os << ", Value: " << (token.value ? *token.value : "N/A");
-        os << ", Line: " << token.line;
+/**
+ * @brief Creates an error token.
+ * @param error Dynamically allocated error message string, ownership transferred.
+ * @param line Source line number.
+ * @return Initialized Token struct.
+ */
+Token token_create_error(char *error, int line);
 
-        if (token.returnType) os << ", ReturnType: " << *token.returnType;
-        if (token.varType) os << ", VarType: " << *token.varType;
+/**
+ * @brief Frees resources owned by a token.
+ * @param token Pointer to the token to clean up.
+ *
+ * Frees `lexeme` and error message if present.
+ */
+void token_cleanup(const Token *token);
 
-        os << ")";
-        return os;
-    }
-};
+/**
+ * @brief Returns a string representation of a token type.
+ * @param type TokenType enum.
+ * @return Constant string describing the token type.
+ */
+const char *token_type_to_string(TokenType type);
 
-#endif
-
+#endif // TOKEN_H
