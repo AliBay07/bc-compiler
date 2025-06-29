@@ -1,4 +1,4 @@
-# b-compiler (bcc v0.2.0)
+# b-compiler (bcc v0.2.1)
 
 A simple compiler for a basic language, written in C.
 
