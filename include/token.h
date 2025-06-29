@@ -18,23 +18,28 @@ typedef enum {
     TOKEN_INT,
     TOKEN_RETURN,
     TOKEN_LET,
+    TOKEN_IMPORT,
 
     // Identifiers and literals
     TOKEN_IDENTIFIER,
     TOKEN_INTEGER,
 
     // Punctuation and operators
-    TOKEN_LANGLE,   // <
-    TOKEN_RANGLE,   // >
-    TOKEN_LPAREN,   // (
-    TOKEN_RPAREN,   // )
-    TOKEN_LBRACE,   // {
-    TOKEN_RBRACE,   // }
-    TOKEN_COLON,    // :
-    TOKEN_COMMA,    // ,
-    TOKEN_SEMI,     // ;
-    TOKEN_EQUAL,    // =
-    TOKEN_PLUS,     // +
+    TOKEN_LANGLE, // <
+    TOKEN_RANGLE, // >
+    TOKEN_LPAREN, // (
+    TOKEN_RPAREN, // )
+    TOKEN_LBRACE, // {
+    TOKEN_RBRACE, // }
+    TOKEN_COLON, // :
+    TOKEN_COMMA, // ,
+    TOKEN_SEMI, // ;
+    TOKEN_EQUAL, // =
+    TOKEN_PLUS, // +
+    TOKEN_DOT, // .
+    TOKEN_SLASH, // /
+    TOKEN_QUOTATION , // "
+    TOKEN_STAR, // *
 
     // Special tokens
     TOKEN_EOF,
@@ -50,11 +55,11 @@ typedef enum {
  */
 typedef struct {
     TokenType type;
-    char *lexeme;   ///< Dynamically allocated string representing the token text; may be NULL.
-    int line;       ///< Source code line number where the token appears.
+    char *lexeme; ///< Dynamically allocated string representing the token text; may be NULL.
+    int line; ///< Source code line number where the token appears.
     union {
-        int64_t int_value;       ///< Integer value for TOKEN_INTEGER.
-        char *error_message;     ///< Dynamically allocated error message for TOKEN_ERROR.
+        int64_t int_value; ///< Integer value for TOKEN_INTEGER.
+        char *error_message; ///< Dynamically allocated error message for TOKEN_ERROR.
     } literal;
 } Token;
 

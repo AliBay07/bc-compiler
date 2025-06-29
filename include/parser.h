@@ -15,45 +15,51 @@
  * @brief AST node types enumeration
  */
 typedef enum {
-  NODE_COMPILATION_UNIT,
-  NODE_FUNCTION,
-  NODE_FUNCTION_CALL,
-  NODE_VAR_DECL,
-  NODE_RETURN,
-  NODE_EXPRESSION,
-  NODE_ADD,
-  NODE_TYPE_PARAM,
-  NODE_INT_LITERAL,
-  NODE_VAR_INT_TYPE,
-  NODE_RETURN_INT_TYPE,
-  NODE_IDENTIFIER,
-  NODE_ASSIGNMENT
+    NODE_COMPILATION_UNIT,
+    NODE_IMPORT,
+    NODE_FUNCTION,
+    NODE_FUNCTION_CALL,
+    NODE_VAR_DECL,
+    NODE_RETURN,
+    NODE_EXPRESSION,
+    NODE_ADD,
+    NODE_TYPE_PARAM,
+    NODE_INT_LITERAL,
+    NODE_VAR_INT_TYPE,
+    NODE_RETURN_INT_TYPE,
+    NODE_IDENTIFIER,
+    NODE_ASSIGNMENT
 } NodeType;
 
 /**
  * @brief AST node structure representing syntax tree nodes
  */
 typedef struct ASTNode {
-  NodeType type;
-  Token token;
-  struct ASTNode **children;
-  size_t child_count;
-  int register_assigned;  // Assigned register index or -1 if none
-  int source_register; // Source register for the value (if applicable)
-  int scope_depth;        // Optional: scope depth for future use
-  bool requires_load;  // Load from stack into register before use
-  bool requires_store; // Store to stack from register after assignment
-  int stack_slot;      // If spilled, where in the stack it lives
+    NodeType type;
+    Token token;
+    struct ASTNode **children;
+    size_t child_count;
+    int register_assigned; // Assigned register index or -1 if none
+    int source_register; // Source register for the value (if applicable)
+    int scope_depth; // Optional: scope depth for future use
+    bool requires_load; // Load from stack into register before use
+    bool requires_store; // Store to stack from register after assignment
+    int stack_slot; // If spilled, where in the stack it lives
 } ASTNode;
 
 /**
  * @brief Parser state structure
  */
 typedef struct {
-  TokenStream *tokens;
-  size_t current;
-  size_t error_count;
-  ASTNode *ast_root;
+    TokenStream *tokens;
+    size_t current;
+    size_t error_count;
+    ASTNode *ast_root;
+
+    // Import tracking
+    char **import_paths; // Array of dynamically allocated strings
+    size_t import_count; // Number of imports
+    size_t import_capacity; // Allocated capacity
 } Parser;
 
 /**
@@ -74,7 +80,7 @@ void parser_cleanup(Parser *parser);
  * @param parser Parser instance.
  * @return Number of syntax errors found (0 if successful).
  */
-int parse(Parser *parser);
+size_t parse(Parser *parser);
 
 /**
  * @brief Print the AST for debugging.

@@ -10,9 +10,28 @@
 #include "../include/codegen_arm.h"
 #include <stdio.h>
 
-/// Emit global entry point label
-static void emit_entry_point(void) {
-    printf(".global main\n");
+/**
+ * @brief Emit the .text section directive.
+ */
+static void emit_text_section(void) {
+    printf(".text\n");
+}
+
+/**
+ * @brief Emit .global for each function name.
+ *
+ * @param root The AST root (NODE_COMPILATION_UNIT).
+ */
+static void emit_global_directives(const ASTNode *root) {
+    if (!root || root->type != NODE_COMPILATION_UNIT) return;
+
+    for (size_t i = 0; i < root->child_count; ++i) {
+        const ASTNode *fn = root->children[i];
+        if (fn && fn->type == NODE_FUNCTION) {
+            const char *name = fn->children[0]->token.lexeme;
+            printf(".global %s\n", name);
+        }
+    }
 }
 
 /**
@@ -205,13 +224,13 @@ static void codegen_function(const ASTNode *node) {
  * @param root The root of the AST (should be NODE_COMPILATION_UNIT)
  */
 void codegen_arm(const ASTNode *root) {
-    if (!root) return;
+    if (!root || root->type != NODE_COMPILATION_UNIT) return;
 
-    emit_entry_point();
+    emit_text_section();
+    emit_global_directives(root);
 
-    if (root->type == NODE_COMPILATION_UNIT) {
-        for (size_t i = 0; i < root->child_count; i++) {
-            codegen_function(root->children[i]);
-        }
+    for (size_t i = 0; i < root->child_count; ++i) {
+        codegen_function(root->children[i]);
     }
 }
+

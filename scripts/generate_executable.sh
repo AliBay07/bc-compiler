@@ -1,33 +1,19 @@
 #!/bin/bash
-# Usage: ./generate_executable.sh <file.s|file.o>
+# Usage: ./generate_executable.sh <output_executable> [-s]
 
-if [ $# -ne 1 ]; then
-    echo "Usage: $0 [--gdb] <file.s|file.o>"
+if [ $# -lt 1 ] || [ $# -gt 2 ]; then
+    echo "Usage: $0 <output_executable> [-s]"
     exit 1
 fi
 
-INPUT="$1"
-BASENAME="${INPUT%.*}"
-
-# Assemble if .s file
-if [[ "$INPUT" == *.s ]]; then
-    OBJ="${BASENAME}.o"
-    arm-none-eabi-as -g -o "$OBJ" "$INPUT"
-    if [ $? -ne 0 ]; then
-        echo "Assembly failed."
-        exit 2
-    fi
-elif [[ "$INPUT" == *.o ]]; then
-    OBJ="$INPUT"
-else
-    echo "Input must be a .s or .o file"
-    exit 1
+EXE_NAME="$1"
+KEEP_TMP=0
+if [ "$2" == "-s" ]; then
+    KEEP_TMP=1
 fi
 
-ELF="${BASENAME}.elf"
-
-# Assemble all .s files in lib/ to .o
-for SFILE in lib/*.s; do
+# Assemble all .s files in tmp/ to .o
+for SFILE in tmp/*.s; do
     [ -e "$SFILE" ] || continue
     OFILE="${SFILE%.s}.o"
     arm-none-eabi-as -g -o "$OFILE" "$SFILE"
@@ -37,19 +23,25 @@ for SFILE in lib/*.s; do
     fi
 done
 
-# Collect all object files in lib/
-LIB_OBJS=$(find lib -name '*.o' 2>/dev/null | tr '\n' ' ')
+# Collect all object files in tmp/
+TMP_OBJS=$(find tmp -name '*.o' 2>/dev/null | tr '\n' ' ')
+
+ELF="tmp/${EXE_NAME}.elf"
 
 # Link
-arm-none-eabi-gcc -specs=rdimon.specs -lc -lrdimon -o "$ELF" "$OBJ" $LIB_OBJS
+arm-none-eabi-gcc -specs=rdimon.specs -lc -lrdimon -o "$ELF" $TMP_OBJS
 if [ $? -ne 0 ]; then
     echo "Linking failed."
-    # Clean up
-    rm -f "$OBJ" $LIB_OBJS
+    [ $KEEP_TMP -eq 0 ] && rm -f $TMP_OBJS
     exit 3
 fi
 
-# Clean up intermediate files
-rm -f "$OBJ" $LIB_OBJS
+# Move ELF to project root with requested name
+mv "$ELF" "./$EXE_NAME"
+
+# Clean up tmp directory
+if [ $KEEP_TMP -eq 0 ]; then
+    rm -rf tmp/
+fi
 
 exit 0
