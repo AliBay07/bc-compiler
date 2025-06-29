@@ -8,7 +8,6 @@
  *  - Call into compile_file() for the actual compilation work
  */
 
-#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,11 +18,15 @@
 #include <libgen.h>
 
 #include "../include/compile.h"
+#include "../include/shell_command_runner.h"
+
+#define _POSIX_C_SOURCE 200809L
+#define PATH_MAX 4096
 
 /* Compiler identity */
 #define COMPILER_NAME "BasicCodeCompiler (bcc)"
 #define VERSION_MAJOR 0
-#define VERSION_MINOR 2
+#define VERSION_MINOR 3
 #define VERSION_PATCH 1
 
 /**
@@ -111,15 +114,37 @@ static CompilerOptions parse_options(int argc, char *argv[], ErrorCode *err) {
     }
 
     if (optind < argc) {
-        opts.filename = argv[optind];
+        // Store the original input path for directory extraction
+        const char *input_path = argv[optind];
+
+        // Set opts.filename to just the base filename
+        char tmp_filename[PATH_MAX];
+        static char base_filename[PATH_MAX];
+        strncpy(tmp_filename, input_path, sizeof(tmp_filename) - 1);
+        tmp_filename[sizeof(tmp_filename) - 1] = '\0';
+        strncpy(base_filename, basename(tmp_filename), sizeof(base_filename) - 1);
+        base_filename[sizeof(base_filename) - 1] = '\0';
+        opts.filename = base_filename;
+
+        // Set output name if not provided
         if (opts.output_name[0] == '\0') {
-            char tmp[256];
-            strncpy(tmp, opts.filename, sizeof(tmp)-1);
-            tmp[sizeof(tmp)-1] = '\0';
-            strncpy(opts.output_name, basename(tmp),
-                    sizeof(opts.output_name)-1);
+            strncpy(tmp_filename, opts.filename, sizeof(tmp_filename) - 1);
+            tmp_filename[sizeof(tmp_filename) - 1] = '\0';
+            strncpy(opts.output_name, tmp_filename, sizeof(opts.output_name) - 1);
+            opts.output_name[sizeof(opts.output_name) - 1] = '\0';
         }
         strip_extension(opts.output_name);
+
+        // Get absolute directory path of the input file
+        static char abs_path[PATH_MAX];
+        static char dir_path[PATH_MAX];
+        if (realpath(input_path, abs_path)) {
+            strncpy(dir_path, abs_path, sizeof(dir_path) - 1);
+            dir_path[sizeof(dir_path) - 1] = '\0';
+            opts.file_directory_path = dirname(dir_path);
+        } else {
+            opts.file_directory_path = NULL;
+        }
     } else {
         *err = ERR_NO_INPUT_FILE;
     }
@@ -139,6 +164,8 @@ int main(const int argc, char *argv[]) {
         print_usage(argv[0]);
         return EXIT_FAILURE;
     }
+
+    run_command("rm -rf tmp"); // Clean up old tmp directory
 
     return compile_file(&opts) == 0
            ? EXIT_SUCCESS

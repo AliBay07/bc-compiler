@@ -42,6 +42,7 @@ typedef struct {
     bool save_asm; /**< If true, keep the .s file after linking */
     Architecture target_arch; /**< Target architecture (e.g. ARCH_ARM) */
     const char *filename; /**< Path to the input source file */
+    const char *file_directory_path; /**< Directory path for the input file */
     char output_name[256]; /**< Base name for output (.s and executable) */
 } CompilerOptions;
 

@@ -13,7 +13,12 @@
 #include <fcntl.h>
 #include <string.h>
 #include <assert.h>
+#include <libgen.h>
+#include <limits.h>
+#include <unistd.h>
+
 #include "../include/compile.h"
+#include "../include/shell_command_runner.h"
 #include "../include/lexer.h"
 #include "../include/parser.h"
 #include "../include/register_allocator.h"
@@ -21,9 +26,6 @@
 
 /** Maximum input file size (1 MiB) */
 static const size_t MAX_FILE_SIZE = 1024 * 1024;
-
-/** Maximum path length for temporary files */
-static const size_t PATH_MAX = 1024;
 
 /**
  * @struct CompilationContext
@@ -82,18 +84,16 @@ static ErrorCode read_file(const char *filename, char **out_buf, size_t *out_len
     return ERR_OK;
 }
 
+// https://stackoverflow.com/questions/230062/whats-the-best-way-to-check-if-a-file-exists-in-c
 /**
- * @brief Execute a shell command, reporting failures.
+ * @brief Check if a file exists at the given path.
  *
- * @param cmd  Null-terminated command string.
- * @return     system() return code.
+ * @param path  Path to the file.
+ * @return      true if the file exists, false otherwise.
  */
-static int run_command(const char *cmd) {
-    const int status = system(cmd);
-    if (status != 0) {
-        fprintf(stderr, "Command failed: %s\n", cmd);
-    }
-    return status;
+bool file_exists(const char *path) {
+    struct stat buffer;
+    return (stat(path, &buffer) == 0);
 }
 
 /**
@@ -231,16 +231,20 @@ static void collect_imports(const ASTNode *node, char ***imports, size_t *count,
  * @return      ERR_OK on success or an ErrorCode on failure.
  */
 ErrorCode compile_file(const CompilerOptions *opts) {
-    // Get absolute path of input file
+    // Check absolute path of input file
     char abs_path[PATH_MAX];
-    if (!realpath(opts->filename, abs_path)) {
+    strcpy(abs_path, opts->file_directory_path);
+    strcat(abs_path, "/");
+    strcat(abs_path, opts->filename);
+
+    if (!file_exists(abs_path)) {
         fprintf(stderr, "Failed to resolve absolute path for '%s'\n", opts->filename);
         return ERR_FILE_OPEN;
     }
 
     // Convert absolute path to a safe filename for tmp/
     char safe_path[PATH_MAX];
-    snprintf(safe_path, sizeof(safe_path), "%s", abs_path);
+    assert(realpath(abs_path, safe_path));
     for (char *p = safe_path; *p; ++p) {
         if (*p == '/') *p = '_';
     }
@@ -272,7 +276,7 @@ ErrorCode compile_file(const CompilerOptions *opts) {
 
     char *source = NULL;
     size_t src_len = 0;
-    const ErrorCode er = read_file(opts->filename, &source, &src_len);
+    const ErrorCode er = read_file(abs_path, &source, &src_len);
     if (er != ERR_OK) {
         fprintf(stderr, "Error reading '%s'\n", opts->filename);
         return er;
@@ -339,38 +343,59 @@ ErrorCode compile_file(const CompilerOptions *opts) {
     // --- Recursively compile all imports ---
     for (size_t i = 0; i < import_count; ++i) {
         const char *import_file = import_files[i];
-        size_t import_len = strlen(import_file);
-        if (import_len > 2 && strcmp(import_file + import_len - 2, ".s") == 0) {
-            // Copy .s file to tmp/ with safe name, avoiding double .s extension
-            char import_abs[PATH_MAX];
-            if (!realpath(import_file, import_abs)) {
-                fprintf(stderr, "Failed to resolve absolute path for import '%s'\n", import_file);
+        char resolved_import[PATH_MAX];
+
+        // If import path starts with "lib/" or import path is absolute, use as is.
+        if (strncmp(import_file, "lib/", 4) == 0 || import_file[0] == '/') {
+            snprintf(resolved_import, sizeof(resolved_import), "%s", import_file);
+        }
+        // Otherwise, prepend file_directory_path.
+        else {
+            snprintf(resolved_import, sizeof(resolved_import), "%s/%s", opts->file_directory_path, import_file);
+        }
+
+        size_t import_len = strlen(resolved_import);
+        if (import_len > 2 && strcmp(resolved_import + import_len - 2, ".s") == 0) {
+            if (!file_exists(resolved_import)) {
+                fprintf(stderr, "Failed to resolve path for import '%s'\n", import_file);
+                free(import_files[i]);
                 continue;
             }
             char import_safe[PATH_MAX];
-            snprintf(import_safe, sizeof(import_safe), "%s", import_abs);
+            assert(realpath(resolved_import, import_safe));
             for (char *p = import_safe; *p; ++p) {
                 if (*p == '/') *p = '_';
             }
-            // Remove .s extension if present
             size_t safe_len = strlen(import_safe);
             if (safe_len > 2 && strcmp(import_safe + safe_len - 2, ".s") == 0) {
                 import_safe[safe_len - 2] = '\0';
             }
             char import_tmp[PATH_MAX + 50];
             snprintf(import_tmp, sizeof(import_tmp), "tmp/%s.s", import_safe);
-            // Only copy if not already present
             struct stat st = {0};
             if (stat(import_tmp, &st) != 0) {
-                char copy_cmd[PATH_MAX * 2 + 16];
-                snprintf(copy_cmd, sizeof(copy_cmd), "cp '%s' '%s'", import_abs, import_tmp);
+                char copy_cmd[PATH_MAX * 4 + 32];
+                snprintf(copy_cmd, sizeof(copy_cmd), "cp '%s' '%s'", resolved_import, import_tmp);
                 run_command(copy_cmd);
             }
         } else {
-            // Recursively compile non .s imports
+            if (!file_exists(resolved_import)) {
+                fprintf(stderr, "Failed to resolve path for import '%s'\n", import_file);
+                free(import_files[i]);
+                continue;
+            }
+            char import_dir[PATH_MAX];
+            char import_base[PATH_MAX];
+            strncpy(import_dir, resolved_import, sizeof(import_dir) - 1);
+            import_dir[sizeof(import_dir) - 1] = '\0';
+            strncpy(import_base, resolved_import, sizeof(import_base) - 1);
+            import_base[sizeof(import_base) - 1] = '\0';
+
             CompilerOptions import_opts = {0};
-            import_opts.filename = import_files[i];
+            import_opts.file_directory_path = dirname(import_dir);
+            import_opts.filename = basename(import_base);
             import_opts.is_executable = false;
+
             compile_file(&import_opts);
         }
         free(import_files[i]);

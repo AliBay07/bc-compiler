@@ -453,71 +453,93 @@ static void add_import_path(Parser *parser, const char *path) {
         parser->import_paths = new_paths;
         parser->import_capacity = new_cap;
     }
-    parser->import_paths[parser->import_count++] = strdup(path);
+    parser->import_paths[parser->import_count] = strdup(path);
+    parser->import_count++;
 }
 
-/* Parse an import statement: 'import <path>' */
+/* Parse an import statement: 'import "path" Or import <stdlib_file>' */
 static void parse_import(Parser *parser) {
     ADVANCE_TOKEN; // consume 'import'
-    if (!expect_token(parser, TOKEN_LANGLE, "Expected '<' after 'import'")) return;
+    bool is_library_import = true;
+    if (peek(parser, TOKEN_QUOTATION)) {
+        is_library_import = false;
+    } else if (!peek(parser, TOKEN_LANGLE)) {
+        parse_error(parser, "Expected '<' or '\"' after 'import'");
+        return;
+    }
 
     // Build the import path
-    size_t path_cap = 64, path_len = 0;
+    size_t path_cap = 1024;
     char *path = malloc(path_cap);
     if (!path) {
         parse_error(parser, "Out of memory while parsing import path");
         return;
     }
     path[0] = '\0';
-
-    bool first = true;
-    while (!peek(parser, TOKEN_RANGLE) && !is_at_end(parser)) {
-        if (peek(parser, TOKEN_IDENTIFIER) || peek(parser, TOKEN_DOT) || peek(parser, TOKEN_SLASH)) {
-            const char *lex = CURRENT_TOKEN.lexeme;
-            size_t lex_len = strlen(lex);
-            if (path_len + lex_len + 1 >= path_cap) {
-                path_cap *= 2;
-                char *new_path = realloc(path, path_cap);
-                if (!new_path) {
-                    free(path);
-                    parse_error(parser, "Out of memory while parsing import path");
-                    return;
+    if (is_library_import) {
+        size_t path_len = 0;
+        bool first = true;
+        ADVANCE_TOKEN; // consume '<' Or '"'
+        while (!peek(parser, TOKEN_RANGLE) && !is_at_end(parser)) {
+            if (peek(parser, TOKEN_IDENTIFIER) || peek(parser, TOKEN_DOT) || peek(parser, TOKEN_SLASH)) {
+                const char *lex = CURRENT_TOKEN.lexeme;
+                const size_t lex_len = strlen(lex);
+                if (path_len + lex_len + 1 >= path_cap) {
+                    path_cap *= 2;
+                    char *new_path = realloc(path, path_cap);
+                    if (!new_path) {
+                        free(path);
+                        parse_error(parser, "Out of memory while parsing import path");
+                        return;
+                    }
+                    path = new_path;
                 }
-                path = new_path;
+                strcat(path, lex);
+                path_len += lex_len;
+                ADVANCE_TOKEN;
+                first = false;
+            } else {
+                free(path);
+                parse_error(parser, "Expected '>' after import");
+                return;
             }
-            strcat(path, lex);
-            path_len += lex_len;
-            ADVANCE_TOKEN;
-            first = false;
-        } else {
+        }
+
+        if (first) {
             free(path);
-            parse_error(parser, "Expected '>' after import path");
+            parse_error(parser, "Expected file path after 'import <'");
             return;
         }
-    }
 
-    if (first) {
-        free(path);
-        parse_error(parser, "Expected file path after 'import<'");
-        return;
+        char final_path[path_cap];
+        snprintf(final_path, path_cap, "lib/%s", path);
+        strncpy(path, final_path, path_cap - 1);
+        path[path_cap - 1] = '\0';
+    } else {
+        const char *file_path = CURRENT_TOKEN.lexeme;
+        snprintf(path, path_cap, "%s", file_path);
+        path[path_cap - 1] = '\0';
     }
 
     add_import_path(parser, path);
 
     // Create AST node for import
     ASTNode *import_node = create_node(NODE_IMPORT, (Token){0});
-    const Token id_token = { .type = TOKEN_IDENTIFIER, .lexeme = strdup(path), .line = CURRENT_TOKEN.line };
+    const Token id_token = {.type = TOKEN_IDENTIFIER, .lexeme = strdup(path), .line = CURRENT_TOKEN.line};
     ASTNode *id_node = create_node(NODE_IDENTIFIER, id_token);
     add_child_node(import_node, id_node);
     add_child_node(parser->ast_root, import_node);
 
     free(path);
-
-    if (!expect_token(parser, TOKEN_RANGLE, "Expected '>' after import path")) return;
+    if (is_library_import) {
+        if (!expect_token(parser, TOKEN_RANGLE, "Expected '>' after import path")) return;
+    } else {
+        ADVANCE_TOKEN;
+    }
 }
 
 /* Top-level parse function: expects imports and/or functions */
-int parse(Parser *parser) {
+size_t parse(Parser *parser) {
     parser->ast_root = create_node(NODE_COMPILATION_UNIT, (Token){0});
 
     while (!is_at_end(parser)) {

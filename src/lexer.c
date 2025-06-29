@@ -174,6 +174,26 @@ Token lexer_next_token(Lexer *lexer) {
         case '=': return token_create(TOKEN_EQUAL, make_single_char_lexeme(c), lexer->line);
         case '+': return token_create(TOKEN_PLUS, make_single_char_lexeme(c), lexer->line);
         case '.': return token_create(TOKEN_DOT, make_single_char_lexeme(c), lexer->line);
+        case '*': return token_create(TOKEN_STAR, make_single_char_lexeme(c), lexer->line);
+        case '"': {
+            // String literal
+            while (peek(lexer) != '"' && !is_at_end(lexer)) {
+                if (peek(lexer) == '\n') lexer->line++;
+                advance(lexer);
+            }
+            if (is_at_end(lexer)) {
+                return token_create_error(strdup("Unterminated string literal"), lexer->line);
+            }
+            advance(lexer); // Consume closing '"'
+            const size_t length = lexer->current - lexer->start - 2; // Exclude quotes
+            char *lexeme = malloc(length + 1);
+            if (!lexeme) {
+                return token_create_error(strdup("Out of memory"), lexer->line);
+            }
+            memcpy(lexeme, lexer->source + lexer->start + 1, length);
+            lexeme[length] = '\0';
+            return token_create(TOKEN_QUOTATION, lexeme, lexer->line);
+        }
         case '/': {
             if (peek(lexer) == '/') {
                 // Single-line comment

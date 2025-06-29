@@ -38,6 +38,8 @@ typedef enum {
     TOKEN_PLUS, // +
     TOKEN_DOT, // .
     TOKEN_SLASH, // /
+    TOKEN_QUOTATION , // "
+    TOKEN_STAR, // *
 
     // Special tokens
     TOKEN_EOF,

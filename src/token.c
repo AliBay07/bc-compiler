@@ -84,6 +84,8 @@ const char *token_type_to_string(const TokenType type) {
         case TOKEN_PLUS:       return "+";
         case TOKEN_DOT:        return ".";
         case TOKEN_SLASH:      return "/";
+        case TOKEN_QUOTATION:  return "\"";
+        case TOKEN_STAR:       return "*";
         case TOKEN_EOF:        return "EOF";
         case TOKEN_ERROR:      return "ERROR";
         default:               return "UNKNOWN";
