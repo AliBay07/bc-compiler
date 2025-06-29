@@ -7,7 +7,7 @@ SRC_DIR := src
 OBJ_DIR := $(BUILD_DIR)/obj
 
 # Output binary
-TARGET := $(BUILD_DIR)/bcc
+TARGET := bcc
 
 ARGS := -s test_files/test_addition.bc
 
@@ -42,3 +42,4 @@ test: all
 
 clean:
 	rm -rf $(BUILD_DIR)
+	rm -f $(TARGET)
