@@ -12,6 +12,9 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include "../include/compile.h"
+
+#include <string.h>
+
 #include "../include/lexer.h"
 #include "../include/parser.h"
 #include "../include/register_allocator.h"
@@ -19,6 +22,9 @@
 
 /** Maximum input file size (1 MiB) */
 static const size_t MAX_FILE_SIZE = 1024 * 1024;
+
+/** Maximum path length for temporary files */
+static const size_t PATH_MAX = 1024;
 
 /**
  * @struct CompilationContext
@@ -187,11 +193,54 @@ static int parse_phase(CompilationContext *ctx, bool show_ast) {
  *
  * Reads source from disk, lexes, parses, allocates registers,
  * emits assembly, and invokes the linker script.
+ * The generated .s file is placed in the tmp directory, using the full
+ * absolute path of the input file (with '/' replaced by '_', and without .bc extension).
+ * The generated executable is named after the input file (without path or .bc).
+ * If the .s file already exists, compilation is skipped.
  *
  * @param opts  CompilerOptions describing flags and file names.
  * @return      ERR_OK on success or an ErrorCode on failure.
  */
 ErrorCode compile_file(const CompilerOptions *opts) {
+    // Get absolute path of input file
+    char abs_path[PATH_MAX];
+    if (!realpath(opts->filename, abs_path)) {
+        fprintf(stderr, "Failed to resolve absolute path for '%s'\n", opts->filename);
+        return ERR_FILE_OPEN;
+    }
+
+    // Convert absolute path to a safe filename for tmp/
+    char safe_path[PATH_MAX];
+    snprintf(safe_path, sizeof(safe_path), "%s", abs_path);
+    for (char *p = safe_path; *p; ++p) {
+        if (*p == '/') *p = '_';
+    }
+    // Remove .bc extension if present (for .s file)
+    size_t len = strlen(safe_path);
+    if (len > 3 && strcmp(safe_path + len - 3, ".bc") == 0) {
+        safe_path[len - 3] = '\0';
+    }
+
+    // Write .s file in tmp directory with full path-based name (no .bc)
+    char asm_path[PATH_MAX + 50];
+    snprintf(asm_path, sizeof(asm_path), "tmp/%s.s", safe_path);
+
+    // Ensure tmp directory exists
+    struct stat st = {0};
+    if (stat("tmp", &st) == -1) {
+        if (mkdir("tmp", 0700) != 0) {
+            fprintf(stderr, "Failed to create tmp directory\n");
+            return ERR_FILE_OPEN;
+        }
+    }
+
+    // If .s file already exists, skip compilation
+    struct stat asm_stat = {0};
+    if (stat(asm_path, &asm_stat) == 0) {
+        printf("Assembly file '%s' already exists, skipping compilation.\n", asm_path);
+        return ERR_OK;
+    }
+
     char *source = NULL;
     size_t src_len = 0;
     const ErrorCode er = read_file(opts->filename, &source, &src_len);
@@ -233,9 +282,6 @@ ErrorCode compile_file(const CompilerOptions *opts) {
     /* Register allocation and backend codegen */
     register_allocate_ast(ctx.ast_root, opts->show_registers);
 
-    /* Emit ARM assembly */
-    char asm_path[300];
-    snprintf(asm_path, sizeof(asm_path), "%s.s", opts->output_name);
     FILE *asm_out = fopen(asm_path, "w");
     if (!asm_out) {
         cleanup_context(&ctx);
@@ -252,17 +298,28 @@ ErrorCode compile_file(const CompilerOptions *opts) {
     close(saved_stdout);
     fclose(asm_out);
 
-    /* Link using provided script */
-    run_command("chmod +x ./scripts/generate_executable.sh");
-    char cmd[512];
-    snprintf(cmd, sizeof(cmd),
-             "./scripts/generate_executable.sh %s", asm_path);
-    run_command(cmd);
-
-    /* Clean up .s if not requested */
-    if (!opts->save_asm) {
-        remove(asm_path);
+    // Get base filename (no path, no .bc)
+    const char *base = strrchr(opts->filename, '/');
+    base = base ? base + 1 : opts->filename;
+    char exe_name[PATH_MAX];
+    strncpy(exe_name, base, sizeof(exe_name));
+    exe_name[sizeof(exe_name) - 1] = '\0';
+    len = strlen(exe_name);
+    if (len > 3 && strcmp(exe_name + len - 3, ".bc") == 0) {
+        exe_name[len - 3] = '\0';
     }
+
+    // Build command for generate_executable.sh
+    char cmd[PATH_MAX * 2 + 32];
+    if (opts->save_asm) {
+        snprintf(cmd, sizeof(cmd),
+                 "./scripts/generate_executable.sh %s %s -s", asm_path, exe_name);
+    } else {
+        snprintf(cmd, sizeof(cmd),
+                 "./scripts/generate_executable.sh %s %s", asm_path, exe_name);
+    }
+    run_command("chmod +x ./scripts/generate_executable.sh");
+    run_command(cmd);
 
     printf("Compilation and linking succeeded for target ARM\n");
 

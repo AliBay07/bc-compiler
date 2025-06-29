@@ -1,12 +1,18 @@
 #!/bin/bash
-# Usage: ./generate_executable.sh <file.s|file.o>
+# Usage: ./generate_executable.sh <input.s|input.o> <output_executable> [-s]
 
-if [ $# -ne 1 ]; then
-    echo "Usage: $0 [--gdb] <file.s|file.o>"
+if [ $# -lt 2 ] || [ $# -gt 3 ]; then
+    echo "Usage: $0 <input.s|input.o> <output_executable> [-s]"
     exit 1
 fi
 
 INPUT="$1"
+EXE_NAME="$2"
+KEEP_TMP=0
+if [ "$3" == "-s" ]; then
+    KEEP_TMP=1
+fi
+
 BASENAME="${INPUT%.*}"
 
 # Assemble if .s file
@@ -24,10 +30,10 @@ else
     exit 1
 fi
 
-ELF="${BASENAME}.elf"
+ELF="tmp/${EXE_NAME}.elf"
 
-# Assemble all .s files in lib/ to .o
-for SFILE in lib/*.s; do
+# Assemble all .s files in tmp/ to .o
+for SFILE in tmp/*.s; do
     [ -e "$SFILE" ] || continue
     OFILE="${SFILE%.s}.o"
     arm-none-eabi-as -g -o "$OFILE" "$SFILE"
@@ -37,19 +43,24 @@ for SFILE in lib/*.s; do
     fi
 done
 
-# Collect all object files in lib/
-LIB_OBJS=$(find lib -name '*.o' 2>/dev/null | tr '\n' ' ')
+# Collect all object files in tmp/
+TMP_OBJS=$(find tmp -name '*.o' 2>/dev/null | tr '\n' ' ')
 
 # Link
-arm-none-eabi-gcc -specs=rdimon.specs -lc -lrdimon -o "$ELF" "$OBJ" $LIB_OBJS
+arm-none-eabi-gcc -specs=rdimon.specs -lc -lrdimon -o "$ELF" $TMP_OBJS
 if [ $? -ne 0 ]; then
     echo "Linking failed."
-    # Clean up
-    rm -f "$OBJ" $LIB_OBJS
+    [ $KEEP_TMP -eq 0 ] && rm -f $TMP_OBJS
     exit 3
 fi
 
-# Clean up intermediate files
-rm -f "$OBJ" $LIB_OBJS
+# Move ELF to project root with requested name
+mv "$ELF" "./$EXE_NAME"
+
+# Clean up intermediate files if not keeping
+if [ $KEEP_TMP -eq 0 ]; then
+    rm -f $TMP_OBJS
+    find tmp -name '*.s' -delete
+fi
 
 exit 0
