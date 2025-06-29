@@ -7,7 +7,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -26,9 +25,9 @@ static const size_t MAX_FILE_SIZE = 1024 * 1024;
  * @brief Holds intermediate state during compilation.
  */
 typedef struct {
-    TokenStream   *token_stream;  /**< Pointer to token stream */
-    ASTNode       *ast_root;      /**< Root of the AST */
-    Architecture   target_arch;   /**< Target architecture */
+    TokenStream *token_stream; /**< Pointer to token stream */
+    ASTNode *ast_root; /**< Root of the AST */
+    Architecture target_arch; /**< Target architecture */
 } CompilationContext;
 
 /**
@@ -43,20 +42,29 @@ static ErrorCode read_file(const char *filename, char **out_buf, size_t *out_len
     FILE *f = fopen(filename, "rb");
     if (!f) return ERR_FILE_OPEN;
 
-    if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return ERR_FILE_SEEK; }
-    long size = ftell(f);
-    if (size < 0)            { fclose(f); return ERR_FILE_TELL; }
-    if ((size_t)size > MAX_FILE_SIZE) {
+    if (fseek(f, 0, SEEK_END) != 0) {
+        fclose(f);
+        return ERR_FILE_SEEK;
+    }
+    const long size = ftell(f);
+    if (size < 0) {
+        fclose(f);
+        return ERR_FILE_TELL;
+    }
+    if ((size_t) size > MAX_FILE_SIZE) {
         fclose(f);
         return ERR_FILE_SIZE;
     }
     rewind(f);
 
     char *buf = malloc(size + 1);
-    if (!buf) { fclose(f); return ERR_MEM_ALLOC; }
+    if (!buf) {
+        fclose(f);
+        return ERR_MEM_ALLOC;
+    }
 
-    size_t read = fread(buf, 1, size, f);
-    if (read != (size_t)size) {
+    const size_t read = fread(buf, 1, size, f);
+    if (read != (size_t) size) {
         free(buf);
         fclose(f);
         return ERR_FILE_READ;
@@ -65,7 +73,7 @@ static ErrorCode read_file(const char *filename, char **out_buf, size_t *out_len
     fclose(f);
 
     *out_buf = buf;
-    *out_len = (size_t)size;
+    *out_len = (size_t) size;
     return ERR_OK;
 }
 
@@ -76,7 +84,7 @@ static ErrorCode read_file(const char *filename, char **out_buf, size_t *out_len
  * @return     system() return code.
  */
 static int run_command(const char *cmd) {
-    int status = system(cmd);
+    const int status = system(cmd);
     if (status != 0) {
         fprintf(stderr, "Command failed: %s\n", cmd);
     }
@@ -141,7 +149,7 @@ static int lex_phase(const char *source, TokenStream *ts) {
     Lexer lex = lexer_create(source);
     int errors = 0;
     while (true) {
-        Token t = lexer_next_token(&lex);
+        const Token t = lexer_next_token(&lex);
         token_stream_add(ts, t);
         if (t.type == TOKEN_ERROR) ++errors;
         if (t.type == TOKEN_EOF) break;
@@ -158,7 +166,7 @@ static int lex_phase(const char *source, TokenStream *ts) {
  */
 static int parse_phase(CompilationContext *ctx, bool show_ast) {
     Parser p = parser_create(ctx->token_stream);
-    int errors = parse(&p);
+    const int errors = parse(&p);
     if (errors == 0) {
         ctx->ast_root = p.ast_root;
         p.ast_root = NULL;
@@ -186,7 +194,7 @@ static int parse_phase(CompilationContext *ctx, bool show_ast) {
 ErrorCode compile_file(const CompilerOptions *opts) {
     char *source = NULL;
     size_t src_len = 0;
-    ErrorCode er = read_file(opts->filename, &source, &src_len);
+    const ErrorCode er = read_file(opts->filename, &source, &src_len);
     if (er != ERR_OK) {
         fprintf(stderr, "Error reading '%s'\n", opts->filename);
         return er;
@@ -195,19 +203,26 @@ ErrorCode compile_file(const CompilerOptions *opts) {
     CompilationContext ctx = {0};
     TokenStream ts = {0};
 
-    int lex_errs = lex_phase(source, &ts);
+    const int lex_errs = lex_phase(source, &ts);
     free(source);
     if (lex_errs > 0) {
+        for (size_t i = 0; i < ts.count; i++) {
+            const Token *t = &ts.tokens[i];
+            if (t->type == TOKEN_ERROR) {
+                fprintf(stderr, "Lexical error at line %d: %s\n", t->line, t->literal.error_message);
+            }
+        }
         fprintf(stderr, "Lexical errors: %d\n", lex_errs);
         cleanup_token_stream(&ts);
         return ERR_LEXICAL;
     }
+
     if (opts->show_tokens) {
         print_tokens(&ts);
     }
 
     ctx.token_stream = &ts;
-    ctx.target_arch  = opts->target_arch;
+    ctx.target_arch = opts->target_arch;
 
     if (parse_phase(&ctx, opts->show_ast) > 0) {
         fprintf(stderr, "Syntax errors detected.\n");
@@ -228,7 +243,7 @@ ErrorCode compile_file(const CompilerOptions *opts) {
     }
 
     /* Temporarily redirect stdout to assembly file */
-    int saved_stdout = dup(fileno(stdout));
+    const int saved_stdout = dup(fileno(stdout));
     fflush(stdout);
     dup2(fileno(asm_out), fileno(stdout));
     codegen_arm(ctx.ast_root);
