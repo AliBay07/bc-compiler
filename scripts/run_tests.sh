@@ -2,7 +2,7 @@
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TEST_FILES="$ROOT_DIR/tests/test_files"
 EXPECTED="$ROOT_DIR/tests/expected_results"
-BCC="$ROOT_DIR/build/bcc"
+BCC="$ROOT_DIR/bcc"
 FAILED_ASM="$ROOT_DIR/tests/failed_assemblies"
 PASS=0
 FAIL=0
