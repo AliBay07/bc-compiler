@@ -35,6 +35,7 @@ typedef enum {
  * @brief Command‑line options and settings for the compiler.
  */
 typedef struct {
+    bool is_executable; /**< If true, generate an executable binary */
     bool show_tokens; /**< If true, dump token stream */
     bool show_ast; /**< If true, dump AST */
     bool show_registers; /**< If true, print register allocation details */

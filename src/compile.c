@@ -337,6 +337,8 @@ ErrorCode compile_file(const CompilerOptions *opts) {
     close(saved_stdout);
     fclose(asm_out);
 
+    printf("Compilation succeeded for file : %s\n", opts->filename);
+
     // --- Recursively compile all imports ---
     for (size_t i = 0; i < import_count; ++i) {
         const char *import_file = import_files[i];
@@ -371,6 +373,7 @@ ErrorCode compile_file(const CompilerOptions *opts) {
             // Recursively compile non .s imports
             CompilerOptions import_opts = {0};
             import_opts.filename = import_files[i];
+            import_opts.is_executable = false;
             compile_file(&import_opts);
         }
         free(import_files[i]);
@@ -389,18 +392,20 @@ ErrorCode compile_file(const CompilerOptions *opts) {
     }
 
     // Build command for generate_executable.sh
-    char cmd[PATH_MAX * 2 + 32];
-    if (opts->save_asm) {
-        snprintf(cmd, sizeof(cmd),
-                 "./scripts/generate_executable.sh %s %s -s", asm_path, exe_name);
-    } else {
-        snprintf(cmd, sizeof(cmd),
-                 "./scripts/generate_executable.sh %s %s", asm_path, exe_name);
-    }
-    run_command("chmod +x ./scripts/generate_executable.sh");
-    run_command(cmd);
+    if (opts->is_executable) {
+        char cmd[PATH_MAX * 2 + 32];
+        if (opts->save_asm) {
+            snprintf(cmd, sizeof(cmd),
+                     "./scripts/generate_executable.sh %s -s", exe_name);
+        } else {
+            snprintf(cmd, sizeof(cmd),
+                     "./scripts/generate_executable.sh %s", exe_name);
+        }
+        run_command("chmod +x ./scripts/generate_executable.sh");
+        run_command(cmd);
 
-    printf("Compilation and linking succeeded for target ARM\n");
+        printf("Executable generated for file : %s\n", opts->filename);
+    }
 
     cleanup_context(&ctx);
     return ERR_OK;

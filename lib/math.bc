@@ -1,9 +1,4 @@
 fun add<a:int, b:int>(): int {
-    print(a);
-    let a<int> = 4;
-    let c<int> = a;
-    print(c);
-    print(b);
-    let z<int> = a + b;
-    return z;
+    let c<int> = a + b;
+    return c;
 }

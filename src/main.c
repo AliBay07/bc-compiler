@@ -124,6 +124,7 @@ static CompilerOptions parse_options(int argc, char *argv[], ErrorCode *err) {
         *err = ERR_NO_INPUT_FILE;
     }
 
+    opts.is_executable = true; // Default to generating an executable
     return opts;
 }
 
