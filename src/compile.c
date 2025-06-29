@@ -11,10 +11,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include "../include/compile.h"
-
 #include <string.h>
-
+#include <assert.h>
+#include "../include/compile.h"
 #include "../include/lexer.h"
 #include "../include/parser.h"
 #include "../include/register_allocator.h"
@@ -197,6 +196,39 @@ static int parse_phase(CompilationContext *ctx, bool show_ast) {
  * absolute path of the input file (with '/' replaced by '_', and without .bc extension).
  * The generated executable is named after the input file (without path or .bc).
  * If the .s file already exists, compilation is skipped.
+ * After parsing, recursively compiles all imported files.
+ *
+ * @param opts  CompilerOptions describing flags and file names.
+ * @return      ERR_OK on success or an ErrorCode on failure.
+ */
+
+static void collect_imports(const ASTNode *node, char ***imports, size_t *count, size_t *cap) {
+    if (!node) return;
+    if (node->type == NODE_IMPORT && node->child_count > 0) {
+        const ASTNode *id = node->children[0];
+        if (id && id->token.lexeme) {
+            if (*count >= *cap) {
+                *cap = *cap ? *cap * 2 : 8;
+                *imports = realloc(*imports, *cap * sizeof(char *));
+                assert(*imports);
+            }
+            (*imports)[(*count)++] = strdup(id->token.lexeme);
+        }
+    }
+    for (size_t i = 0; i < node->child_count; ++i) {
+        collect_imports(node->children[i], imports, count, cap);
+    }
+}
+
+/**
+ * @brief Top-level compilation function.
+ *
+ * Reads source from disk, lexes, parses, allocates registers,
+ * emits assembly, and invokes the linker script.
+ * The generated .s file is placed in the tmp directory, using the full
+ * absolute path of the input file (with '/' replaced by '_', and without .bc extension).
+ * The generated executable is named after the input file (without path or .bc).
+ * If the .s file already exists, compilation is skipped.
  *
  * @param opts  CompilerOptions describing flags and file names.
  * @return      ERR_OK on success or an ErrorCode on failure.
@@ -279,12 +311,19 @@ ErrorCode compile_file(const CompilerOptions *opts) {
         return ERR_SYNTAX;
     }
 
+    // --- Collect imports after parsing ---
+    char **import_files = NULL;
+    size_t import_count = 0, import_cap = 0;
+    collect_imports(ctx.ast_root, &import_files, &import_count, &import_cap);
+
     /* Register allocation and backend codegen */
     register_allocate_ast(ctx.ast_root, opts->show_registers);
 
     FILE *asm_out = fopen(asm_path, "w");
     if (!asm_out) {
         cleanup_context(&ctx);
+        for (size_t i = 0; i < import_count; ++i) free(import_files[i]);
+        free(import_files);
         return ERR_FILE_OPEN;
     }
 
@@ -297,6 +336,46 @@ ErrorCode compile_file(const CompilerOptions *opts) {
     dup2(saved_stdout, fileno(stdout));
     close(saved_stdout);
     fclose(asm_out);
+
+    // --- Recursively compile all imports ---
+    for (size_t i = 0; i < import_count; ++i) {
+        const char *import_file = import_files[i];
+        size_t import_len = strlen(import_file);
+        if (import_len > 2 && strcmp(import_file + import_len - 2, ".s") == 0) {
+            // Copy .s file to tmp/ with safe name, avoiding double .s extension
+            char import_abs[PATH_MAX];
+            if (!realpath(import_file, import_abs)) {
+                fprintf(stderr, "Failed to resolve absolute path for import '%s'\n", import_file);
+                continue;
+            }
+            char import_safe[PATH_MAX];
+            snprintf(import_safe, sizeof(import_safe), "%s", import_abs);
+            for (char *p = import_safe; *p; ++p) {
+                if (*p == '/') *p = '_';
+            }
+            // Remove .s extension if present
+            size_t safe_len = strlen(import_safe);
+            if (safe_len > 2 && strcmp(import_safe + safe_len - 2, ".s") == 0) {
+                import_safe[safe_len - 2] = '\0';
+            }
+            char import_tmp[PATH_MAX + 50];
+            snprintf(import_tmp, sizeof(import_tmp), "tmp/%s.s", import_safe);
+            // Only copy if not already present
+            struct stat st = {0};
+            if (stat(import_tmp, &st) != 0) {
+                char copy_cmd[PATH_MAX * 2 + 16];
+                snprintf(copy_cmd, sizeof(copy_cmd), "cp '%s' '%s'", import_abs, import_tmp);
+                run_command(copy_cmd);
+            }
+        } else {
+            // Recursively compile non .s imports
+            CompilerOptions import_opts = {0};
+            import_opts.filename = import_files[i];
+            compile_file(&import_opts);
+        }
+        free(import_files[i]);
+    }
+    free(import_files);
 
     // Get base filename (no path, no .bc)
     const char *base = strrchr(opts->filename, '/');

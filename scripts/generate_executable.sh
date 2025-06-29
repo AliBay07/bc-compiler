@@ -57,10 +57,9 @@ fi
 # Move ELF to project root with requested name
 mv "$ELF" "./$EXE_NAME"
 
-# Clean up intermediate files if not keeping
+# Clean up tmp directory
 if [ $KEEP_TMP -eq 0 ]; then
-    rm -f $TMP_OBJS
-    find tmp -name '*.s' -delete
+    rm -rf tmp/
 fi
 
 exit 0
