@@ -188,20 +188,17 @@ static int parse_phase(CompilationContext *ctx, bool show_ast) {
 }
 
 /**
- * @brief Top-level compilation function.
+ * @brief Collect all import paths from the AST.
  *
- * Reads source from disk, lexes, parses, allocates registers,
- * emits assembly, and invokes the linker script.
- * The generated .s file is placed in the tmp directory, using the full
- * absolute path of the input file (with '/' replaced by '_', and without .bc extension).
- * The generated executable is named after the input file (without path or .bc).
- * If the .s file already exists, compilation is skipped.
- * After parsing, recursively compiles all imported files.
+ * Recursively traverses the AST and collects import paths into a dynamically
+ * allocated array of strings. The caller is responsible for freeing the array
+ * and its contents.
  *
- * @param opts  CompilerOptions describing flags and file names.
- * @return      ERR_OK on success or an ErrorCode on failure.
+ * @param node     Current AST node to process.
+ * @param imports  Pointer to array of import strings (to be filled).
+ * @param count    Pointer to current count of imports.
+ * @param cap      Pointer to current capacity of the imports array.
  */
-
 static void collect_imports(const ASTNode *node, char ***imports, size_t *count, size_t *cap) {
     if (!node) return;
     if (node->type == NODE_IMPORT && node->child_count > 0) {
